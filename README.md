@@ -66,7 +66,292 @@ Order Service
          Verify Product
              |
              v
-         Check Stock
+         Check Stock# Task: Investigate the Existing Project and Develop the Kubernetes Investigation Backend
+
+You are a senior Python/FastAPI developer, Kubernetes engineer, and security-focused software architect helping our student team build an **AI-Powered Kubernetes Security Investigation Platform**.
+
+We have already deployed an e-commerce microservices application on K3s and installed Prometheus and Grafana.
+
+We are now starting the development of the investigation platform.
+
+**Your immediate objective is to investigate our existing files and infrastructure, propose the backend architecture, and then, after approval, implement the first working FastAPI backend connected to Kubernetes.**
+
+## 1. Development environment
+
+I am using:
+
+- Windows as my main computer.
+- VS Code and Codex through Remote SSH.
+- Ubuntu 24.04 running inside VMware.
+- An existing single-node K3s cluster on Ubuntu.
+- Python for backend development.
+
+The project is located at:
+
+`/home/wejden/k8s_project`
+
+**All development must happen on the Ubuntu VM through the remote VS Code workspace.**
+
+The Ubuntu folder is our source of truth. I may maintain a separate Windows copy for viewing and backup, but do not automatically synchronize or modify it.
+
+Do not install K3s in WSL, replace the cluster, or redeploy the existing application.
+
+## 2. Existing infrastructure
+
+Our e-commerce application includes:
+
+- Flask frontend on port 5500
+- API Gateway on port 5000
+- User Service on port 5002
+- Product Service on port 5001
+- Order Service on port 5003
+- PostgreSQL on port 5432
+
+The application is deployed in Kubernetes namespace `ecommerce`.
+
+We already have:
+
+- Kubernetes Deployments and Services
+- PostgreSQL StatefulSet and persistent storage
+- Traefik Ingress
+- Prometheus
+- Grafana
+- kube-state-metrics
+- node-exporter
+
+Monitoring components are in namespace `monitoring`.
+
+Loki, Grafana Alloy, Falco, and the LLM investigation agent are planned but not implemented yet.
+
+The VM has previously experienced CPU and memory pressure. Verify the current status before assuming the monitoring stack is healthy.
+
+## 3. Important safety requirements
+
+We previously encountered Git confusion because the e-commerce project has a nested `.git` repository.
+
+For this task:
+
+- Do not execute Git operations that change repository state, including `add`, `commit`, `push`, `reset`, `clean`, `switch`, or branch creation.
+- Do not delete, move, or overwrite the existing e-commerce application.
+- Do not modify the existing Kubernetes manifests or Helm releases without approval.
+- Do not restart or delete running Pods.
+- Do not deploy additional infrastructure yet.
+- Do not expose the Kubernetes API publicly.
+- Do not print or commit passwords, tokens, `.env` values, SSH keys, kubeconfig contents, or Kubernetes Secret data.
+- Do not modify the existing React frontend in this milestone.
+- Do not copy Kubernetes administrator credentials into the project.
+- Keep Kubernetes operations read-only.
+
+GitHub integration will be handled separately.
+
+## 4. PHASE A — Investigate the existing project
+
+**Start with read-only inspection. Do not write code yet.**
+
+Inspect `/home/wejden/k8s_project` to identify:
+
+1. Existing directories and project components.
+2. Whether a FastAPI backend already exists.
+3. Whether any Kubernetes Python client integration already exists.
+4. The e-commerce application's Docker Compose and Kubernetes deployment configurations.
+5. The existing monitoring Helm values and Ingress definitions.
+6. Existing Python dependencies and tests.
+7. Existing frontend API expectations.
+8. The best location for our investigation backend.
+
+Inspect the running cluster using safe, read-only commands where available:
+
+```bash
+sudo systemctl is-active k3s
+sudo k3s kubectl get nodes
+sudo k3s kubectl get namespaces
+sudo k3s kubectl get pods -n ecommerce
+sudo k3s kubectl get pods -n monitoring
+```
+
+If these commands require interactive sudo authentication, ask me to run them rather than requesting passwords or bypassing permissions.
+
+Check how the existing user can access Kubernetes without exposing credential files.
+
+If the current kubeconfig has administrator privileges, explain the implications and propose a dedicated read-only RBAC identity for future integration. Do not create it automatically.
+
+### Deliverable A
+
+Before making changes, report:
+
+- Current project structure
+- Existing application and monitoring components
+- Current Kubernetes status, if accessible
+- Existing backend code, if any
+- Recommended backend directory
+- Proposed file structure
+- Dependencies required
+- Security considerations
+- Implementation plan
+
+**STOP after the investigation and wait for my approval before implementing anything.**
+
+## 5. PHASE B — Implement the FastAPI backend after approval
+
+Build the first version using:
+
+- Python 3
+- FastAPI
+- Uvicorn
+- Official Kubernetes Python client
+- Pydantic models
+- Pytest for tests
+
+Reuse existing backend code if appropriate. Do not duplicate an existing service.
+
+Design a clear, modular structure, for example:
+
+```text
+investigation-backend/
+├── app/
+│   ├── __init__.py
+│   ├── main.py
+│   ├── api/
+│   │   └── routes/
+│   │       ├── health.py
+│   │       └── kubernetes.py
+│   ├── services/
+│   │   └── kubernetes_service.py
+│   └── schemas/
+│       └── kubernetes.py
+├── tests/
+├── requirements.txt
+└── README.md
+```
+
+This is a proposed structure. Adapt it if you find an existing backend or a better established project convention.
+
+### Initial endpoints
+
+**GET /api/health**
+
+Return the backend's status without depending on Kubernetes availability.
+
+**GET /api/namespaces**
+
+List Kubernetes namespaces.
+
+**GET /api/pods?namespace=ecommerce**
+
+Return the real Pods in the requested namespace, including:
+
+- Name
+- Namespace
+- Phase
+- Node
+- Readiness
+- Container states
+- Restart counts
+- Waiting reasons
+- Current and previous termination reasons when available
+
+**GET /api/pods/{namespace}/{pod_name}/diagnostics**
+
+Return structured diagnostic evidence:
+
+- Pod metadata
+- Pod conditions
+- Container states
+- Restart counts
+- Last termination state
+- Related Kubernetes events
+- Recent container logs
+
+For logs, use a reasonable maximum line count and response size. Support Pods with multiple containers and handle unavailable logs gracefully.
+
+The backend must only collect and expose evidence. Do not invent root causes or pretend an LLM is already implemented.
+
+### Kubernetes integration requirements
+
+- Use the official Kubernetes Python client.
+- Respect `KUBECONFIG` or the local Kubernetes client configuration.
+- Support future in-cluster authentication when we deploy the backend inside Kubernetes.
+- Avoid hard-coded credentials or IP addresses.
+- Use read-only Kubernetes API calls.
+- Handle missing Pods, invalid namespaces, permission failures, connection failures, and timeouts.
+- Avoid exposing sensitive credentials or full internal exceptions to API clients.
+- Bind Uvicorn to `127.0.0.1` by default.
+- Keep the backend accessible from Windows through VS Code SSH port forwarding.
+
+For this local prototype, investigate the safest available way to access K3s. Prefer an appropriately scoped read-only identity. Do not automatically grant new permissions or copy administrator credentials.
+
+## 6. Tests
+
+After implementation:
+
+1. Verify imports and Python syntax.
+2. Run automated tests with mocked Kubernetes responses.
+3. Test `/api/health`.
+4. Test namespace listing.
+5. Test Pod listing.
+6. Test diagnostics for healthy and failing Pod states.
+7. Test API error handling.
+8. Where permissions allow, test against the real `ecommerce` namespace.
+
+Do not create deliberately failing Pods or alter existing workloads during this milestone.
+
+Clearly report which tests passed and which could not be run.
+
+## 7. Documentation
+
+Document:
+
+- Project structure and responsibilities
+- Backend setup on Ubuntu
+- Python virtual environment creation
+- Dependency installation
+- Safe Kubernetes authentication
+- Running Uvicorn
+- Accessing the API through VS Code port forwarding
+- Swagger documentation at `http://localhost:8000/docs`
+- Testing the API
+- Known limitations and future integrations
+
+## 8. Future architecture — plan only
+
+Our eventual platform will integrate:
+
+- Prometheus for metrics
+- Loki and Grafana Alloy for logs
+- Falco for runtime security alerts
+- An LLM tool-calling investigation agent
+- A frontend dashboard
+- Human-approved remediation with auditable, limited Kubernetes permissions
+
+Do not implement these components in the first backend milestone.
+
+Design the backend so we can add them later without major restructuring.
+
+## 9. How you should work with me
+
+I want to understand every development step.
+
+Follow this process:
+
+1. Inspect the repository.
+2. Explain what already exists.
+3. Propose the smallest practical backend architecture.
+4. List exactly which files you intend to create or modify.
+5. Stop and ask for approval.
+6. After approval, implement one component at a time.
+7. Explain what each component does.
+8. Run tests and report actual results.
+9. Provide exact commands to launch the backend from Ubuntu.
+10. Do not run any Git commit or push commands.
+
+### Start now
+
+Begin with **PHASE A: repository and K3s investigation**.
+
+Your first response must include a clear analysis of the existing project and an implementation plan.
+
+**Do not modify any files until I approve your plan.**
+
              |
              v
         Reduce Stock
